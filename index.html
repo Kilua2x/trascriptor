@@ -159,6 +159,7 @@
 
         .progress-container {
             margin: 20px 0;
+            display: none;
         }
 
         .progress-bar {
@@ -211,14 +212,9 @@
             border: 2px solid #ef4444;
         }
 
-        .status.loading {
-            background: #fff7ed;
-            color: #9a3412;
-            border: 2px solid #fb923c;
-        }
-
         .transcription-container {
             margin-top: 30px;
+            display: none;
         }
 
         .transcription-header {
@@ -271,43 +267,6 @@
             font-size: 0.9rem;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .recording {
-            animation: pulse 2s infinite;
-        }
-
-        .language-selector {
-            margin: 20px 0;
-            text-align: center;
-        }
-
-        .language-selector select {
-            padding: 10px 15px;
-            border: 2px solid #e5e7eb;
-            border-radius: 10px;
-            font-size: 1rem;
-            background: white;
-            cursor: pointer;
-        }
-
-        .model-selector {
-            margin: 20px 0;
-            text-align: center;
-        }
-
-        .model-selector select {
-            padding: 10px 15px;
-            border: 2px solid #e5e7eb;
-            border-radius: 10px;
-            font-size: 1rem;
-            background: white;
-            cursor: pointer;
-        }
-
         .spinner {
             display: inline-block;
             width: 20px;
@@ -346,8 +305,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎙️ Transcriptor de Audio Avanzado</h1>
-            <p>Convierte archivos de audio a texto sin necesidad de reproducirlos</p>
+            <h1>🎙️ Transcriptor de Audio</h1>
+            <p>Convierte archivos de audio a texto en español sin reproducirlos</p>
         </div>
 
         <div class="content">
@@ -355,35 +314,11 @@
             <div class="upload-section" id="uploadSection">
                 <div class="upload-icon">📁</div>
                 <h3>Arrastra tu archivo de audio aquí</h3>
-                <p>O haz clic para seleccionar (MP3, WAV, M4A, OGG, FLAC, etc.)</p>
+                <p>O haz clic para seleccionar (MP3, WAV, M4A, OGG)</p>
                 <input type="file" id="audioFile" class="file-input" accept="audio/*">
                 <button class="upload-btn" onclick="document.getElementById('audioFile').click()">
                     Seleccionar Archivo
                 </button>
-            </div>
-
-            <!-- Selector de modelo y opciones -->
-            <div class="model-selector">
-                <label for="modelSelect">Modelo de transcripción: </label>
-                <select id="modelSelect">
-                    <option value="tiny">Tiny (rápido, menos preciso)</option>
-                    <option value="base" selected>Base (equilibrado)</option>
-                    <option value="small">Small (preciso, más lento)</option>
-                </select>
-            </div>
-
-            <!-- Selector de idioma -->
-            <div class="language-selector">
-                <label for="languageSelect">Idioma de transcripción: </label>
-                <select id="languageSelect">
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
-                    <option value="fr">Français</option>
-                    <option value="de">Deutsch</option>
-                    <option value="it">Italiano</option>
-                    <option value="pt">Português</option>
-                    <option value="auto" selected>Detección automática</option>
-                </select>
             </div>
 
             <!-- Información del archivo -->
@@ -394,33 +329,30 @@
                 <p id="fileDuration"></p>
             </div>
 
-            <!-- Reproductor de audio -->
+            <!-- Reproductor de audio (oculto pero útil para verificación) -->
             <audio id="audioPlayer" controls style="width: 100%; margin: 20px 0; display: none;"></audio>
 
-            <!-- Barra de progreso de transcripción -->
-            <div class="progress-container" id="progressContainer" style="display: none;">
+            <!-- Barra de progreso -->
+            <div class="progress-container" id="progressContainer">
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill"></div>
                 </div>
                 <div class="time-info">
                     <span id="progressText">0%</span>
-                    <span id="estimatedTime">Tiempo estimado: calculando...</span>
+                    <span id="estimatedTime">Procesando...</span>
                 </div>
             </div>
 
             <!-- Controles -->
             <div class="controls">
-                <button class="control-btn play-btn" id="playBtn" onclick="playAudio()" disabled>
-                    ▶️ Reproducir
-                </button>
-                <button class="control-btn pause-btn" id="pauseBtn" onclick="pauseAudio()" disabled>
-                    ⏸️ Pausar
-                </button>
                 <button class="control-btn transcribe-btn" id="transcribeBtn" onclick="startTranscription()" disabled>
                     🎯 Transcribir
                 </button>
                 <button class="control-btn stop-btn" id="cancelBtn" onclick="cancelTranscription()" disabled>
                     ⏹️ Cancelar
+                </button>
+                <button class="control-btn play-btn" id="playBtn" onclick="playAudio()" disabled>
+                    ▶️ Reproducir (opcional)
                 </button>
             </div>
 
@@ -428,7 +360,7 @@
             <div class="status" id="status"></div>
 
             <!-- Transcripción -->
-            <div class="transcription-container" id="transcriptionContainer" style="display: none;">
+            <div class="transcription-container" id="transcriptionContainer">
                 <div class="transcription-header">
                     <h3>📝 Transcripción</h3>
                     <button class="export-btn" onclick="exportTranscription()">
@@ -441,17 +373,20 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0"></script>
     <script>
         // Variables globales
         let audioFile = null;
         let audioPlayer = document.getElementById('audioPlayer');
         let transcriptionText = '';
         let isTranscribing = false;
-        let transcriptionWorker = null;
-        let transcriptionStartTime = 0;
-        let transcriptionAborted = false;
-        let whistlerPipeline = null;
+        let audioContext = null;
+        let audioBuffer = null;
+        let fileReader = null;
+        let segmentOffset = 0;
+        let segmentDuration = 30; // segundos por segmento
+        let audioAnalyzer = null;
+        let isCancelled = false;
+        let audioBlob = null;
 
         // Inicializar eventos
         document.addEventListener('DOMContentLoaded', function() {
@@ -483,28 +418,7 @@
                     handleFileSelect(e.target.files[0]);
                 }
             });
-
-            // Cargar el modelo de Whisper en segundo plano
-            showStatus('loading', '🔄 Cargando modelo de transcripción...');
-            loadWhisperModel();
         });
-
-        async function loadWhisperModel() {
-            try {
-                // Importamos la pipeline desde la librería Transformers.js
-                const { pipeline } = await import('@xenova/transformers');
-                
-                // Inicializamos el modelo de Whisper (se descargará la primera vez)
-                whistlerPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base');
-                
-                hideStatus();
-                showStatus('completed', '✅ Modelo de transcripción cargado correctamente');
-                setTimeout(hideStatus, 3000);
-            } catch (error) {
-                console.error('Error al cargar el modelo:', error);
-                showStatus('error', '❌ Error al cargar el modelo de transcripción. Intenta recargar la página.');
-            }
-        }
 
         function handleFileSelect(file) {
             if (!file.type.startsWith('audio/')) {
@@ -513,98 +427,55 @@
             }
 
             audioFile = file;
-            setupAudioPlayer(file);
-            showAudioInfo(file);
+            audioBlob = new Blob([file], { type: file.type });
+            setupAudioPlayer();
+            showAudioInfo();
             enableControls();
         }
 
-        function setupAudioPlayer(file) {
-            const url = URL.createObjectURL(file);
+        function setupAudioPlayer() {
+            const url = URL.createObjectURL(audioFile);
             audioPlayer.src = url;
-            audioPlayer.style.display = 'block';
 
             audioPlayer.addEventListener('loadedmetadata', function() {
-                updateTimeInfo();
-            });
-
-            audioPlayer.addEventListener('timeupdate', function() {
-                updateProgress();
-            });
-
-            audioPlayer.addEventListener('ended', function() {
-                resetPlayButton();
+                document.getElementById('fileDuration').textContent = `⏱️ Duración: ${formatTime(audioPlayer.duration)}`;
             });
         }
 
-        function showAudioInfo(file) {
+        function showAudioInfo() {
             const audioInfo = document.getElementById('audioInfo');
             const fileName = document.getElementById('fileName');
             const fileSize = document.getElementById('fileSize');
-            const fileDuration = document.getElementById('fileDuration');
 
-            fileName.textContent = `📄 Nombre: ${file.name}`;
-            fileSize.textContent = `📏 Tamaño: ${formatFileSize(file.size)}`;
-
+            fileName.textContent = `📄 Nombre: ${audioFile.name}`;
+            fileSize.textContent = `📏 Tamaño: ${formatFileSize(audioFile.size)}`;
             audioInfo.style.display = 'block';
-
-            // Obtener duración cuando el audio se cargue
-            audioPlayer.addEventListener('loadedmetadata', function() {
-                fileDuration.textContent = `⏱️ Duración: ${formatTime(audioPlayer.duration)}`;
-            });
         }
 
         function enableControls() {
-            document.getElementById('playBtn').disabled = false;
-            document.getElementById('pauseBtn').disabled = false;
             document.getElementById('transcribeBtn').disabled = false;
+            document.getElementById('playBtn').disabled = false;
         }
 
         function playAudio() {
+            audioPlayer.style.display = 'block';
             audioPlayer.play();
-            document.getElementById('playBtn').textContent = '⏸️ Pausar';
-            document.getElementById('playBtn').onclick = pauseAudio;
-        }
-
-        function pauseAudio() {
-            audioPlayer.pause();
-            resetPlayButton();
-        }
-
-        function resetPlayButton() {
-            document.getElementById('playBtn').textContent = '▶️ Reproducir';
-            document.getElementById('playBtn').onclick = playAudio;
-        }
-
-        function updateProgress() {
-            if (audioPlayer.duration) {
-                const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
-                document.getElementById('progressFill').style.width = progress + '%';
-            }
-        }
-
-        function updateTimeInfo() {
-            document.getElementById('currentTime').textContent = formatTime(audioPlayer.currentTime);
-            document.getElementById('totalTime').textContent = formatTime(audioPlayer.duration);
         }
 
         async function startTranscription() {
-            if (isTranscribing) {
-                return;
-            }
-
+            if (isTranscribing) return;
             if (!audioFile) {
                 showStatus('error', '❌ Por favor selecciona un archivo de audio primero.');
                 return;
             }
 
-            if (!whistlerPipeline) {
-                showStatus('error', '❌ El modelo de transcripción aún no está listo. Por favor espera unos momentos.');
-                return;
-            }
-
+            // Reiniciar variables
             isTranscribing = true;
-            transcriptionAborted = false;
+            isCancelled = false;
             transcriptionText = '';
+            segmentOffset = 0;
+
+            // Actualizar UI
             document.getElementById('transcribeBtn').disabled = true;
             document.getElementById('cancelBtn').disabled = false;
             document.getElementById('transcriptionContainer').style.display = 'block';
@@ -613,106 +484,192 @@
             document.getElementById('progressFill').style.width = '0%';
             document.getElementById('progressText').textContent = '0%';
 
-            showStatus('transcribing', '🎯 Transcribiendo audio... Este proceso se realiza localmente en tu navegador.');
-            
-            transcriptionStartTime = Date.now();
-            
+            showStatus('transcribing', '🎯 Transcribiendo audio. Este proceso puede tardar unos minutos...');
+
             try {
-                // Actualizar modelo según la selección del usuario
-                const modelSize = document.getElementById('modelSelect').value;
-                const modelId = `Xenova/whisper-${modelSize}`;
+                // Procesar audio con la API de Speech Recognition
+                const audioUrl = URL.createObjectURL(audioFile);
                 
-                if (whistlerPipeline.model_id !== modelId) {
-                    showStatus('loading', `🔄 Cargando modelo ${modelSize}...`);
-                    const { pipeline } = await import('@xenova/transformers');
-                    whistlerPipeline = await pipeline('automatic-speech-recognition', modelId);
+                // Primero intentamos la transcripción directa con el enfoque SpeechRecognition
+                await transcribeWithSpeechRecognition(audioUrl);
+                
+                if (isCancelled) throw new Error('Transcripción cancelada');
+                
+                // Si hay texto transcrito, mostrar resultado
+                if (transcriptionText && transcriptionText.trim() !== '') {
+                    document.getElementById('transcriptionText').textContent = transcriptionText;
+                    updateWordCount();
+                    document.getElementById('progressFill').style.width = '100%';
+                    document.getElementById('progressText').textContent = '100%';
+                    showStatus('completed', '✅ Transcripción completada exitosamente!');
+                } else {
+                    throw new Error('No se pudo obtener texto de la transcripción');
                 }
-                
-                // Convertir archivo a ArrayBuffer
-                const arrayBuffer = await audioFile.arrayBuffer();
-                
-                // Configurar opciones según el idioma seleccionado
-                const language = document.getElementById('languageSelect').value;
-                const options = {
-                    chunk_length_s: 30,
-                    stride_length_s: 5,
-                    return_timestamps: true
-                };
-                
-                if (language !== 'auto') {
-                    options.language = language;
-                }
-                
-                // Iniciar transcripción con reporte de progreso
-                const transcribeWithProgress = async () => {
-                    const result = await whistlerPipeline(arrayBuffer, {
-                        ...options,
-                        callback_function: (progress) => {
-                            if (transcriptionAborted) return false;
-                            
-                            // Actualizar UI con el progreso
-                            const percent = Math.round(progress * 100);
-                            document.getElementById('progressFill').style.width = `${percent}%`;
-                            document.getElementById('progressText').textContent = `${percent}%`;
-                            
-                            // Calcular tiempo estimado restante
-                            if (progress > 0.05) {
-                                const elapsedTime = (Date.now() - transcriptionStartTime) / 1000;
-                                const totalEstimatedTime = elapsedTime / progress;
-                                const remainingTime = totalEstimatedTime - elapsedTime;
-                                
-                                document.getElementById('estimatedTime').textContent = 
-                                    `Tiempo restante: ${formatTime(remainingTime)}`;
-                            }
-                            
-                            return true;
-                        }
-                    });
-                    
-                    return result;
-                };
-                
-                const result = await transcribeWithProgress();
-                
-                if (transcriptionAborted) {
-                    throw new Error('Transcripción cancelada por el usuario');
-                }
-                
-                // Procesar resultado
-                transcriptionText = result.text;
-                document.getElementById('transcriptionText').textContent = transcriptionText;
-                updateWordCount();
-                
-                // Completar transcripción
-                document.getElementById('progressFill').style.width = '100%';
-                document.getElementById('progressText').textContent = '100%';
-                document.getElementById('estimatedTime').textContent = 'Completado';
-                
-                showStatus('completed', '✅ Transcripción completada exitosamente!');
             } catch (error) {
                 console.error('Error en transcripción:', error);
-                if (!transcriptionAborted) {
-                    showStatus('error', `❌ Error en la transcripción: ${error.message}`);
+                if (!isCancelled) {
+                    showStatus('error', `❌ Error: ${error.message}. Intenta con un archivo más corto o en otro formato.`);
                 }
             } finally {
                 isTranscribing = false;
                 document.getElementById('transcribeBtn').disabled = false;
                 document.getElementById('cancelBtn').disabled = true;
+                
+                // Si no hay texto transcrito después de todo, mostrar mensaje
+                if (!transcriptionText || transcriptionText.trim() === '') {
+                    document.getElementById('transcriptionText').textContent = 
+                        "No se pudo transcribir el audio automáticamente. Prueba con un archivo más corto o con mejor calidad de audio.";
+                }
             }
+        }
+
+        async function transcribeWithSpeechRecognition(audioUrl) {
+            return new Promise((resolve, reject) => {
+                // Crear un elemento de audio oculto
+                const audioElement = new Audio(audioUrl);
+                audioElement.volume = 0.01; // Volumen muy bajo pero no 0 para que funcione el reconocimiento
+                
+                // Configurar el reconocimiento de voz
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    reject(new Error('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.'));
+                    return;
+                }
+                
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = false;
+                recognition.lang = 'es-ES'; // Forzar español
+                
+                let finalText = '';
+                let lastResultTime = Date.now();
+                const transcriptionTimeout = 10000; // 10 segundos sin resultados = timeout
+                
+                // Control de segmentos y progreso
+                let segmentsProcessed = 0;
+                const audioDuration = audioElement.duration || 180; // Valor predeterminado si no se puede determinar
+                const segmentSize = 15; // segundos por segmento
+                const totalSegments = Math.ceil(audioDuration / segmentSize);
+                
+                // Temporalizador para comprobar si no hay resultados durante mucho tiempo
+                let noResultTimer = setInterval(() => {
+                    const timeElapsed = Date.now() - lastResultTime;
+                    if (timeElapsed > transcriptionTimeout && isTranscribing) {
+                        // Avanzar al siguiente segmento si no hay resultados
+                        moveToNextSegment();
+                    }
+                }, 2000);
+                
+                recognition.onresult = function(event) {
+                    lastResultTime = Date.now();
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        if (event.results[i].isFinal) {
+                            const transcript = event.results[i][0].transcript;
+                            finalText += ' ' + transcript;
+                            
+                            // Actualizar texto
+                            transcriptionText = finalText.trim();
+                            document.getElementById('transcriptionText').textContent = transcriptionText;
+                            updateWordCount();
+                        }
+                    }
+                };
+                
+                recognition.onerror = function(event) {
+                    console.warn('Error de reconocimiento:', event.error);
+                    // No rechazar aquí, solo registrar el error y continuar
+                    if (event.error === 'network') {
+                        moveToNextSegment();
+                    }
+                };
+                
+                recognition.onend = function() {
+                    if (isCancelled) {
+                        clearInterval(noResultTimer);
+                        resolve();
+                        return;
+                    }
+                    
+                    // Si aún estamos transcribiendo, continuar con el siguiente segmento
+                    if (isTranscribing && segmentsProcessed < totalSegments) {
+                        moveToNextSegment();
+                    } else {
+                        // Finalizar transcripción
+                        clearInterval(noResultTimer);
+                        resolve();
+                    }
+                };
+                
+                // Función para avanzar al siguiente segmento
+                function moveToNextSegment() {
+                    segmentsProcessed++;
+                    
+                    // Actualizar progreso
+                    const progress = Math.min(100, Math.round((segmentsProcessed / totalSegments) * 100));
+                    document.getElementById('progressFill').style.width = `${progress}%`;
+                    document.getElementById('progressText').textContent = `${progress}%`;
+                    
+                    if (segmentsProcessed >= totalSegments || isCancelled) {
+                        // Hemos terminado todos los segmentos
+                        audioElement.pause();
+                        recognition.stop();
+                        clearInterval(noResultTimer);
+                        resolve();
+                        return;
+                    }
+                    
+                    // Detener reconocimiento actual
+                    recognition.stop();
+                    
+                    // Establecer nueva posición
+                    const newPosition = segmentsProcessed * segmentSize;
+                    audioElement.currentTime = newPosition;
+                    
+                    // Iniciar nuevo reconocimiento después de un breve retraso
+                    setTimeout(() => {
+                        if (!isCancelled && isTranscribing) {
+                            audioElement.play();
+                            recognition.start();
+                            lastResultTime = Date.now();
+                        }
+                    }, 500);
+                }
+                
+                // Iniciar reconocimiento
+                audioElement.oncanplay = function() {
+                    if (!isCancelled) {
+                        audioElement.play();
+                        recognition.start();
+                        lastResultTime = Date.now();
+                    }
+                };
+                
+                // Iniciar carga del audio
+                audioElement.load();
+                
+                // Manejar errores de carga
+                audioElement.onerror = function() {
+                    clearInterval(noResultTimer);
+                    reject(new Error('No se pudo cargar el archivo de audio'));
+                };
+            });
         }
 
         function cancelTranscription() {
             if (!isTranscribing) return;
             
-            transcriptionAborted = true;
-            showStatus('error', '❌ Transcripción cancelada por el usuario.');
+            isCancelled = true;
+            isTranscribing = false;
+            
+            showStatus('error', '❌ Transcripción cancelada.');
             
             document.getElementById('transcribeBtn').disabled = false;
             document.getElementById('cancelBtn').disabled = true;
         }
 
         function exportTranscription() {
-            if (!transcriptionText.trim()) {
+            if (!transcriptionText || !transcriptionText.trim()) {
                 showStatus('error', '❌ No hay transcripción para exportar.');
                 return;
             }
@@ -728,11 +685,11 @@
             URL.revokeObjectURL(url);
 
             showStatus('completed', '💾 Transcripción exportada exitosamente!');
-            setTimeout(hideStatus, 3000);
         }
 
         function updateWordCount() {
-            const words = transcriptionText.trim().split(/\s+/).filter(word => word.length > 0);
+            const text = document.getElementById('transcriptionText').textContent;
+            const words = text.trim().split(/\s+/).filter(word => word.length > 0);
             document.getElementById('wordCount').textContent = `${words.length} palabras`;
         }
 
@@ -740,8 +697,7 @@
             const status = document.getElementById('status');
             status.className = `status ${type}`;
             
-            // Si es transcribiendo o cargando, añadir spinner
-            if (type === 'transcribing' || type === 'loading') {
+            if (type === 'transcribing') {
                 status.innerHTML = `<div class="spinner"></div>${message}`;
             } else {
                 status.textContent = message;
@@ -750,12 +706,10 @@
             status.style.display = 'block';
 
             if (type === 'completed' || type === 'error') {
-                setTimeout(hideStatus, 5000);
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
             }
-        }
-
-        function hideStatus() {
-            document.getElementById('status').style.display = 'none';
         }
 
         function formatTime(seconds) {
